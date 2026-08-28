@@ -19,15 +19,15 @@ echo " Base: Xubuntu 24.04.4 LTS"
 echo "========================================"
 
 rm -rf "$WORKDIR"
-mkdir -p "$WORKDIR" "$OUTPUT_DIR"
+mkdir -p "$WORKDIR" "$OUTPUT_DIR" "$ISO_ROOT"
 
-echo "[1/8] Xubuntu ISO letöltése..."
+echo "[1/9] Xubuntu ISO letöltése..."
+
 curl -L --fail --retry 3 \
   "$BASE_URL" \
   -o "$WORKDIR/$BASE_ISO"
 
-echo "[2/8] ISO kibontása..."
-mkdir -p "$ISO_ROOT"
+echo "[2/9] ISO tartalmának kibontása..."
 
 xorriso \
   -osirrox on \
@@ -36,14 +36,58 @@ xorriso \
 
 chmod -R u+w "$ISO_ROOT"
 
-echo "[3/8] Live filesystem kibontása..."
+echo
+echo "===== CASPER TARTALMA ====="
+find "$ISO_ROOT/casper" -maxdepth 1 -type f -printf "%f\n" || true
+echo "==========================="
+echo
+
+echo "[3/9] Live SquashFS megkeresése..."
+
+SQUASH_FILE=""
+
+for candidate in \
+  "$ISO_ROOT/casper/filesystem.squashfs" \
+  "$ISO_ROOT/casper/minimal.standard.live.squashfs" \
+  "$ISO_ROOT/casper/minimal.standard.live.squashfs"; do
+
+  if [ -f "$candidate" ]; then
+    SQUASH_FILE="$candidate"
+    break
+  fi
+
+done
+
+if [ -z "$SQUASH_FILE" ]; then
+  SQUASH_FILE="$(find "$ISO_ROOT/casper" \
+    -maxdepth 1 \
+    -type f \
+    -name "*.squashfs" \
+    | head -n 1 || true)"
+fi
+
+if [ -z "$SQUASH_FILE" ] || [ ! -f "$SQUASH_FILE" ]; then
+  echo "ERROR: Nem találtam SquashFS fájlt a casper mappában."
+  echo
+  find "$ISO_ROOT/casper" -maxdepth 2 -type f || true
+  exit 1
+fi
+
+echo "Megtalált SquashFS:"
+echo "$SQUASH_FILE"
+
+SQUASH_FILENAME="$(basename "$SQUASH_FILE")"
+
+echo "[4/9] SquashFS kibontása..."
+
 unsquashfs \
   -d "$SQUASH_ROOT" \
-  "$ISO_ROOT/casper/filesystem.squashfs"
+  "$SQUASH_FILE"
 
-echo "[4/8] LollyOS rendszerfájlok telepítése..."
+echo "[5/9] LollyOS branding telepítése..."
 
 mkdir -p "$SQUASH_ROOT/etc/lollyos"
+
 echo "$VERSION" > "$SQUASH_ROOT/etc/lollyos/version"
 
 cat > "$SQUASH_ROOT/etc/os-release" <<EOF
@@ -62,31 +106,31 @@ EOF
 
 echo "lollyos" > "$SQUASH_ROOT/etc/hostname"
 
-echo "[5/8] Repository LollyOS fájlok másolása..."
+echo "[6/9] Repository rendszerfájlok másolása..."
 
 if [ -d "$PWD/config/includes.chroot" ]; then
-    rsync -a \
-      "$PWD/config/includes.chroot/" \
-      "$SQUASH_ROOT/"
+  rsync -a \
+    "$PWD/config/includes.chroot/" \
+    "$SQUASH_ROOT/"
 fi
 
-echo "[6/8] SquashFS újraépítése..."
+echo "[7/9] SquashFS újraépítése..."
 
-rm -f "$ISO_ROOT/casper/filesystem.squashfs"
+rm -f "$SQUASH_FILE"
 
 mksquashfs \
   "$SQUASH_ROOT" \
-  "$ISO_ROOT/casper/filesystem.squashfs" \
+  "$SQUASH_FILE" \
   -comp xz \
   -noappend
 
-echo "[7/8] filesystem.size frissítése..."
+echo "[8/9] filesystem.size frissítése..."
 
 du -sx --block-size=1 "$SQUASH_ROOT" \
   | cut -f1 \
   > "$ISO_ROOT/casper/filesystem.size"
 
-echo "[8/8] Bootolható ISO újraépítése..."
+echo "[9/9] Bootolható ISO újraépítése..."
 
 rm -f "$OUTPUT_ISO"
 
@@ -100,7 +144,8 @@ sha256sum "$OUTPUT_ISO" > "$OUTPUT_ISO.sha256"
 
 echo
 echo "========================================"
-echo " BUILD KÉSZ"
+echo " LollyOS BUILD KÉSZ"
 echo "========================================"
+
 ls -lh "$OUTPUT_ISO"
 ls -lh "$OUTPUT_ISO.sha256"
