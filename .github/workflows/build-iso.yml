@@ -1,10 +1,10 @@
-name: Build LollyOS Ubuntu ISO
+name: Build LollyOS ISO
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
-    tags: [ 'v*' ]
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -12,83 +12,46 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 180
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
-        shell: bash
+      - name: Free disk space
         run: |
-          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/local/.ghcup || true
+          sudo apt-get clean
+          df -h
+
+      - name: Install dependencies
+        run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            live-build \
-            debootstrap \
-            ubuntu-archive-keyring \
             xorriso \
             squashfs-tools \
-            isolinux \
-            syslinux-common \
-            ca-certificates \
             curl \
-            gnupg
+            rsync \
+            ca-certificates
 
-      - name: Make LollyOS scripts executable
-        shell: bash
+      - name: Build LollyOS
         run: |
-          set -euo pipefail
-          chmod +x auto/config
-          chmod +x config/hooks/live/*.hook.chroot
-          chmod +x config/includes.chroot/usr/local/bin/lolly-update
+          chmod +x scripts/build-iso.sh
+          sudo ./scripts/build-iso.sh
 
-      - name: Configure Ubuntu Noble image
-        shell: bash
+      - name: Show output
         run: |
-          set -euo pipefail
-          sudo lb clean --purge || true
-          sudo ./auto/config
+          ls -lah output/
 
-      - name: Build ISO
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo lb build
-
-      - name: Prepare ISO and checksum
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="$(cat config/includes.chroot/etc/lollyos/version)"
-          ISO_SOURCE="live-image-amd64.hybrid.iso"
-          ISO_TARGET="LollyOS-${VERSION}-ubuntu-noble-amd64.iso"
-
-          if [[ ! -f "$ISO_SOURCE" ]]; then
-            echo "ERROR: live-build did not create $ISO_SOURCE"
-            exit 1
-          fi
-
-          sudo mv "$ISO_SOURCE" "$ISO_TARGET"
-          sudo chown "$USER:$USER" "$ISO_TARGET"
-          sha256sum "$ISO_TARGET" > "$ISO_TARGET.sha256"
-          ls -lh "$ISO_TARGET" "$ISO_TARGET.sha256"
-
-      - name: Upload ISO artifact
+      - name: Upload LollyOS ISO
         uses: actions/upload-artifact@v4
         with:
-          name: LollyOS-Ubuntu-ISO
+          name: LollyOS-0.2.0
           path: |
-            LollyOS-*.iso
-            LollyOS-*.iso.sha256
+            output/*.iso
+            output/*.sha256
           if-no-files-found: error
           retention-days: 14
-
-      - name: Publish tagged release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            LollyOS-*.iso
-            LollyOS-*.iso.sha256
-          generate_release_notes: true
