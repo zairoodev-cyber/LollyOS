@@ -1,0 +1,14 @@
+---
+componentName: lollyos
+welcomeStyleCalamares: true
+strings:
+  productName: LollyOS
+  shortProductName: LollyOS
+  version: 0.2.0
+  shortVersion: 0.2.0
+  versionedName: LollyOS 0.2.0
+  shortVersionedName: LollyOS 0.2.0
+  bootloaderEntryName: LollyOS
+  productUrl: https://github.com/zairoodev-cyber/LollyOS
+  supportUrl: https://github.com/zairoodev-cyber/LollyOS/issues
+  releaseNotesUrl: https://github.com/zairoodev-cyber/LollyOS/releases

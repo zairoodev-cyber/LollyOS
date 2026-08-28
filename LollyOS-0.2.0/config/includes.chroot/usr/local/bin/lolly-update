@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+import json, urllib.request, webbrowser
+from pathlib import Path
+import tkinter as tk
+from tkinter import messagebox
+
+REPO = "zairoodev-cyber/LollyOS"
+CURRENT = Path('/etc/lollyos/version').read_text().strip() if Path('/etc/lollyos/version').exists() else '0.0.0'
+API = f"https://api.github.com/repos/{REPO}/releases/latest"
+
+def version_tuple(v):
+    v=v.lstrip('v').split('-')[0]
+    return tuple(int(x) for x in v.split('.') if x.isdigit())
+
+def check():
+    status.set('Frissítések keresése…')
+    root.update_idletasks()
+    try:
+        req=urllib.request.Request(API, headers={'User-Agent':'LollyOS-Updater'})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data=json.load(r)
+        latest=data.get('tag_name','0.0.0').lstrip('v')
+        if version_tuple(latest) > version_tuple(CURRENT):
+            status.set(f'Új verzió érhető el: LollyOS {latest}')
+            btn_download.config(state='normal')
+            root.release_url=data.get('html_url','https://github.com/'+REPO+'/releases')
+        else:
+            status.set(f'A rendszer naprakész — LollyOS {CURRENT}')
+            btn_download.config(state='disabled')
+    except Exception as e:
+        status.set('Nem sikerült elérni a GitHub Releases szolgáltatást.')
+        messagebox.showerror('Lolly Update', str(e))
+
+def open_release():
+    webbrowser.open(getattr(root,'release_url','https://github.com/'+REPO+'/releases'))
+
+root=tk.Tk(); root.title('Lolly Update'); root.geometry('560x300'); root.resizable(False,False)
+tk.Label(root,text='🍭',font=('Sans',44)).pack(pady=(24,0))
+tk.Label(root,text='Lolly Update',font=('Sans',22,'bold')).pack()
+tk.Label(root,text=f'Jelenlegi verzió: {CURRENT}',font=('Sans',11)).pack(pady=6)
+status=tk.StringVar(value='Készen áll a frissítések keresésére.')
+tk.Label(root,textvariable=status,font=('Sans',11)).pack(pady=14)
+row=tk.Frame(root); row.pack()
+tk.Button(row,text='Frissítések keresése',command=check,width=22).pack(side='left',padx=6)
+btn_download=tk.Button(row,text='Kiadás megnyitása',command=open_release,width=18,state='disabled'); btn_download.pack(side='left',padx=6)
+root.mainloop()

@@ -1,0 +1,11 @@
+PRETTY_NAME="LollyOS 0.2.0"
+NAME="LollyOS"
+VERSION_ID="0.2.0"
+VERSION="0.2.0 (Ubuntu Preview)"
+VERSION_CODENAME=noble
+ID=lollyos
+ID_LIKE="ubuntu debian"
+UBUNTU_CODENAME=noble
+HOME_URL="https://github.com/zairoodev-cyber/LollyOS"
+SUPPORT_URL="https://github.com/zairoodev-cyber/LollyOS/issues"
+BUG_REPORT_URL="https://github.com/zairoodev-cyber/LollyOS/issues"

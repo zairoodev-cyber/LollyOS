@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Lolly Update
+Comment=LollyOS frissítések keresése
+Exec=/usr/local/bin/lolly-update
+Icon=system-software-update
+Terminal=false
+Type=Application
+Categories=Settings;System;

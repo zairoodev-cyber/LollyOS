@@ -1,0 +1,6 @@
+/.build/
+/cache/
+/chroot/
+/binary/
+*.iso
+*.sha256

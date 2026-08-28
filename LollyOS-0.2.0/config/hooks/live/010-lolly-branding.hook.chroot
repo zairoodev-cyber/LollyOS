@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+# Live user gets sudo access; installer creates the final user.
+echo 'lolly ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/lolly-live
+chmod 440 /etc/sudoers.d/lolly-live
+systemctl enable NetworkManager || true
+systemctl enable bluetooth || true
+systemctl enable lightdm || true
