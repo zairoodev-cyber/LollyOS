@@ -2,34 +2,37 @@
 set -euo pipefail
 
 VERSION="0.2.0"
-
 BASE_ISO="xubuntu-24.04.4-desktop-amd64.iso"
 BASE_URL="https://cdimage.ubuntu.com/xubuntu/releases/24.04/release/${BASE_ISO}"
 
-WORKDIR="$PWD/build"
+ROOT="$PWD"
+WORKDIR="$ROOT/build"
+OUTPUT_DIR="$ROOT/output"
 BASE_PATH="$WORKDIR/$BASE_ISO"
 
-SQUASH_ISO_PATH="/casper/minimal.standard.live.squashfs"
-
-OLD_SQUASH="$WORKDIR/original.squashfs"
+SQUASH_ROOT="$WORKDIR/squashfs-root"
+OLD_SQUASH="$WORKDIR/original-live.squashfs"
 NEW_SQUASH="$WORKDIR/minimal.standard.live.squashfs"
-SQUASH_ROOT="$WORKDIR/squashfs"
 NEW_SIZE="$WORKDIR/filesystem.size"
+BOOT_REPORT="$WORKDIR/boot-report.txt"
 
-OUTPUT_DIR="$PWD/output"
+SQUASH_ISO_PATH="/casper/minimal.standard.live.squashfs"
+SIZE_ISO_PATH="/casper/filesystem.size"
+
 OUTPUT_ISO="$OUTPUT_DIR/LollyOS-${VERSION}-ubuntu-noble-amd64.iso"
 
-echo "========================================"
-echo " LollyOS ${VERSION}"
-echo " Xubuntu 24.04.4 LTS remaster"
-echo "========================================"
+log() {
+    printf '\n[%s] %s\n' "$1" "$2"
+}
 
-#
-# 1. MUNKAKORNYEZET
-#
+die() {
+    echo "HIBA: $*" >&2
+    exit 1
+}
 
-echo
-echo "[1/9] Munkakornyezet elokeszitese..."
+# ============================================================
+# ELŐKÉSZÍTÉS
+# ============================================================
 
 rm -rf "$WORKDIR"
 mkdir -p "$WORKDIR"
@@ -38,12 +41,16 @@ mkdir -p "$OUTPUT_DIR"
 rm -f "$OUTPUT_ISO"
 rm -f "$OUTPUT_ISO.sha256"
 
-#
-# 2. XUBUNTU ISO
-#
+echo "========================================"
+echo " LollyOS ${VERSION}"
+echo " Xubuntu 24.04.4 LTS remaster"
+echo "========================================"
 
-echo
-echo "[2/9] Xubuntu 24.04.4 ISO letoltese..."
+# ============================================================
+# 1. BASE ISO
+# ============================================================
+
+log "1/9" "Xubuntu 24.04.4 ISO letoltese..."
 
 curl \
     -L \
@@ -53,94 +60,95 @@ curl \
     "$BASE_URL" \
     -o "$BASE_PATH"
 
-if [ ! -s "$BASE_PATH" ]; then
-    echo "HIBA: A Xubuntu ISO letoltese sikertelen."
-    exit 1
-fi
+[ -s "$BASE_PATH" ] || die "A base ISO nem toltodott le."
 
 echo
-echo "Xubuntu ISO letoltve:"
 ls -lh "$BASE_PATH"
 
-#
-# 3. SQUASHFS KINYERESE
-#
+# ============================================================
+# 2. CASPER ELLENŐRZÉS
+# ============================================================
+
+log "2/9" "A szukseges Casper fajlok ellenorzese..."
+
+CASPER_LIST="$WORKDIR/base-casper-list.txt"
+
+xorriso \
+    -indev "$BASE_PATH" \
+    -ls /casper \
+    > "$CASPER_LIST" 2>&1 || {
+        cat "$CASPER_LIST"
+        die "A /casper mappa nem olvashato."
+    }
+
+cat "$CASPER_LIST"
+
+grep -Fq "minimal.standard.live.squashfs" "$CASPER_LIST" || {
+    die "$SQUASH_ISO_PATH nem talalhato."
+}
+
+grep -Fq "filesystem.size" "$CASPER_LIST" || {
+    die "$SIZE_ISO_PATH nem talalhato."
+}
 
 echo
-echo "[3/9] Live rendszer kinyerese..."
+echo "Casper fajlok: OK"
 
-echo "Hasznalt live SquashFS:"
-echo "$SQUASH_ISO_PATH"
+# ============================================================
+# 3. LIVE SQUASHFS KINYERÉSE
+# ============================================================
+
+log "3/9" "Live SquashFS kinyerese..."
 
 xorriso \
     -osirrox on \
     -indev "$BASE_PATH" \
-    -extract "$SQUASH_ISO_PATH" "$OLD_SQUASH"
+    -extract_single "$SQUASH_ISO_PATH" "$OLD_SQUASH"
 
-if [ ! -s "$OLD_SQUASH" ]; then
-    echo "HIBA: Nem sikerult kinyerni a live SquashFS-t."
-    exit 1
-fi
+[ -s "$OLD_SQUASH" ] || \
+    die "A live SquashFS kinyerese sikertelen."
 
 echo
-echo "SquashFS sikeresen kinyerve:"
 ls -lh "$OLD_SQUASH"
 
-#
-# 4. SQUASHFS KIBONTASA
-#
+# ============================================================
+# 4. SQUASHFS KIBONTÁSA
+# ============================================================
 
-echo
-echo "[4/9] Live rendszer kibontasa..."
-
-rm -rf "$SQUASH_ROOT"
+log "4/9" "Live rendszer kibontasa..."
 
 unsquashfs \
     -d "$SQUASH_ROOT" \
     "$OLD_SQUASH"
 
-if [ ! -d "$SQUASH_ROOT/etc" ]; then
-    echo "HIBA: A live rendszer kibontasa sikertelen."
-    exit 1
-fi
+[ -d "$SQUASH_ROOT/etc" ] || \
+    die "A SquashFS kibontasa sikertelen."
 
 rm -f "$OLD_SQUASH"
 
 echo
 echo "Live rendszer kibontva."
 
-#
+# ============================================================
 # 5. LOLLYOS FAJLOK
-#
+# ============================================================
 
-echo
-echo "[5/9] LollyOS telepitese a live rendszerbe..."
+log "5/9" "LollyOS fajlok alkalmazasa..."
 
-mkdir -p "$SQUASH_ROOT/etc/lollyos"
-mkdir -p "$SQUASH_ROOT/etc/sudoers.d"
-
-#
-# Repo sajat rendszerfajljai
-#
-
-if [ -d "$PWD/config/includes.chroot" ]; then
+if [ -d "$ROOT/config/includes.chroot" ]; then
 
     echo "config/includes.chroot masolasa..."
 
     rsync \
         -a \
-        "$PWD/config/includes.chroot/" \
+        "$ROOT/config/includes.chroot/" \
         "$SQUASH_ROOT/"
 
 else
-
     echo "FIGYELEM: config/includes.chroot nem talalhato."
-
 fi
 
-#
-# LollyOS OS informacio
-#
+mkdir -p "$SQUASH_ROOT/etc/lollyos"
 
 cat > "$SQUASH_ROOT/etc/os-release" <<EOF
 PRETTY_NAME="LollyOS ${VERSION}"
@@ -156,59 +164,27 @@ SUPPORT_URL="https://github.com/zairoodev-cyber/LollyOS/issues"
 BUG_REPORT_URL="https://github.com/zairoodev-cyber/LollyOS/issues"
 EOF
 
-#
-# LollyOS verzio
-#
+printf '%s\n' "$VERSION" \
+    > "$SQUASH_ROOT/etc/lollyos/version"
 
-echo "$VERSION" > "$SQUASH_ROOT/etc/lollyos/version"
-
-#
-# Hostname
-#
-
-echo "lollyos" > "$SQUASH_ROOT/etc/hostname"
-
-#
-# Live sudo
-#
-
-cat > "$SQUASH_ROOT/etc/sudoers.d/lolly-live" <<EOF
-lolly ALL=(ALL) NOPASSWD: ALL
-EOF
-
-chmod 440 "$SQUASH_ROOT/etc/sudoers.d/lolly-live"
-
-#
-# Lolly updater executable
-#
+printf 'lollyos\n' \
+    > "$SQUASH_ROOT/etc/hostname"
 
 if [ -f "$SQUASH_ROOT/usr/local/bin/lolly-update" ]; then
 
-    chmod +x "$SQUASH_ROOT/usr/local/bin/lolly-update"
-
-    echo "LollyOS updater megtalalva."
+    chmod +x \
+        "$SQUASH_ROOT/usr/local/bin/lolly-update"
 
 fi
 
-#
-# NetworkManager autostart desktop file
-#
-
-if [ -f "$SQUASH_ROOT/etc/xdg/autostart/nm-applet.desktop" ]; then
-    chmod 644 "$SQUASH_ROOT/etc/xdg/autostart/nm-applet.desktop"
-fi
-
 echo
-echo "LollyOS rendszerfajlok telepitve."
+echo "LollyOS fajlok alkalmazva."
 
-#
-# 6. UJ SQUASHFS
-#
+# ============================================================
+# 6. ÚJ SQUASHFS
+# ============================================================
 
-echo
-echo "[6/9] Uj LollyOS SquashFS epitese..."
-
-rm -f "$NEW_SQUASH"
+log "6/9" "Uj SquashFS epitese..."
 
 mksquashfs \
     "$SQUASH_ROOT" \
@@ -217,18 +193,12 @@ mksquashfs \
     -b 131072 \
     -noappend
 
-if [ ! -s "$NEW_SQUASH" ]; then
-    echo "HIBA: Az uj SquashFS nem keszult el."
-    exit 1
-fi
+[ -s "$NEW_SQUASH" ] || \
+    die "Az uj SquashFS nem keszult el."
 
 echo
-echo "Uj LollyOS SquashFS:"
+echo "Uj SquashFS:"
 ls -lh "$NEW_SQUASH"
-
-#
-# filesystem.size
-#
 
 du \
     -sx \
@@ -237,41 +207,38 @@ du \
     | cut -f1 \
     > "$NEW_SIZE"
 
-if [ ! -s "$NEW_SIZE" ]; then
-    echo "HIBA: filesystem.size generalasa sikertelen."
-    exit 1
-fi
+[ -s "$NEW_SIZE" ] || \
+    die "filesystem.size nem keszult el."
 
 echo
 echo "filesystem.size:"
 cat "$NEW_SIZE"
 
-#
-# Hely felszabaditasa
-#
-
+# Már nem kell a kibontott rootfs.
 rm -rf "$SQUASH_ROOT"
 
-#
-# 7. ISO EPITES
-#
+# ============================================================
+# 7. ISO MÓDOSÍTÁSA
+# ============================================================
+
+log "7/9" "Bootolhato LollyOS ISO modositasa..."
 
 echo
-echo "[7/9] Bootolhato LollyOS ISO epitese..."
-
-echo
-echo "Az eredeti Xubuntu bootstruktura megmarad."
-echo "Csak a live rendszer kerul lecserelesre."
+echo "Meglevo ISO fajlok felulirasa..."
 echo
 
-rm -f "$OUTPUT_ISO"
-
 #
-# Az xorriso bizonyos boot replay figyelmeztetesek miatt
-# 32-es exit kodot adhat akkor is, ha az ISO tenylegesen
-# sikeresen kiirodott.
+# FONTOS:
 #
-# Ezert ideiglenesen kikapcsoljuk a set -e-t.
+# NINCS:
+#
+#   -rm squashfs
+#   -rm filesystem.size
+#
+# Ehelyett az xorriso sajat overwrite mechanizmusat
+# hasznaljuk.
+#
+# A boot replay pedig a fajlmuveletek UTAN tortenik.
 #
 
 set +e
@@ -279,160 +246,153 @@ set +e
 xorriso \
     -indev "$BASE_PATH" \
     -outdev "$OUTPUT_ISO" \
+    -overwrite nondir \
+    -map_single "$NEW_SQUASH" "$SQUASH_ISO_PATH" \
+    -map_single "$NEW_SIZE" "$SIZE_ISO_PATH" \
     -boot_image any replay \
-    -rm "$SQUASH_ISO_PATH" \
-    -map "$NEW_SQUASH" "$SQUASH_ISO_PATH" \
-    -rm /casper/filesystem.size \
-    -map "$NEW_SIZE" /casper/filesystem.size \
     -commit
 
-XORRISO_EXIT=$?
+XORRISO_RC=$?
 
 set -e
 
 echo
-echo "xorriso exit code: $XORRISO_EXIT"
+echo "xorriso exit code: $XORRISO_RC"
+
+[ -s "$OUTPUT_ISO" ] || {
+    die "Az ISO nem jott letre. xorriso exit code: $XORRISO_RC"
+}
+
+echo
+echo "ISO letrejott:"
+ls -lh "$OUTPUT_ISO"
+
+# ============================================================
+# 8. AZ OUTPUT ISO VALÓDI ELLENŐRZÉSE
+# ============================================================
+
+log "8/9" "Az ELKESZULT ISO ellenorzese..."
+
+OUTPUT_CASPER="$WORKDIR/output-casper-list.txt"
 
 #
-# Az ISO-nak mindenkeppen leteznie kell.
+# Nem a base ISO-t ellenorizzuk,
+# hanem konkretan az ELKESZULT LollyOS ISO-t.
 #
 
-if [ ! -s "$OUTPUT_ISO" ]; then
+xorriso \
+    -indev "$OUTPUT_ISO" \
+    -ls /casper \
+    > "$OUTPUT_CASPER" 2>&1 || {
+
+        cat "$OUTPUT_CASPER"
+        die "Az output ISO /casper mappaja nem olvashato."
+
+    }
+
+cat "$OUTPUT_CASPER"
+
+#
+# Pont azt a hibat szurjuk ki,
+# ami az elozo buildnel tortent.
+#
+
+grep -Fq "minimal.standard.live.squashfs" "$OUTPUT_CASPER" || {
 
     echo
     echo "========================================"
     echo " HIBA"
     echo "========================================"
     echo
-    echo "Az ISO nem keszult el."
-    echo "xorriso exit code: $XORRISO_EXIT"
+    echo "Az uj live SquashFS HIANYZIK az ISO-bol."
 
     exit 1
+}
 
-fi
-
-echo
-echo "ISO fajl sikeresen letrejott:"
-ls -lh "$OUTPUT_ISO"
-
-if [ "$XORRISO_EXIT" -ne 0 ]; then
+grep -Fq "filesystem.size" "$OUTPUT_CASPER" || {
 
     echo
-    echo "FIGYELEM:"
-    echo "xorriso nem 0 exit kodot adott: $XORRISO_EXIT"
+    echo "========================================"
+    echo " HIBA"
+    echo "========================================"
     echo
-    echo "Az ISO azonban letrejott."
-    echo "Most ellenorizzuk a bootstrukturat."
+    echo "filesystem.size HIANYZIK az ISO-bol."
 
-fi
-
-#
-# 8. BOOT ELLENORZES
-#
+    exit 1
+}
 
 echo
-echo "[8/9] ISO bootstruktura ellenorzese..."
+echo "SquashFS az output ISO-ban: OK"
+echo "filesystem.size az output ISO-ban: OK"
 
-BOOT_REPORT="$WORKDIR/boot-report.txt"
+# ============================================================
+# BOOT ELLENŐRZÉS
+# ============================================================
 
-set +e
+echo
+echo "Bootstruktura ellenorzese..."
 
 xorriso \
     -indev "$OUTPUT_ISO" \
     -report_el_torito plain \
-    2>&1 | tee "$BOOT_REPORT"
+    > "$BOOT_REPORT" 2>&1 || {
 
-BOOT_CHECK_EXIT=${PIPESTATUS[0]}
+        cat "$BOOT_REPORT"
+        die "A boot report nem olvashato."
 
-set -e
+    }
 
-if [ "$BOOT_CHECK_EXIT" -ne 0 ]; then
+cat "$BOOT_REPORT"
+
+grep -qi "El Torito" "$BOOT_REPORT" || \
+    die "Nincs El Torito boot informacio."
+
+grep -qi "EFI" "$BOOT_REPORT" || \
+    die "Nincs EFI boot informacio."
+
+echo
+echo "El Torito: OK"
+echo "EFI boot: OK"
+
+#
+# Ha az ISO írása figyelmeztetést adott, de
+# maga az output ISO ellenorzese sikeres volt,
+# akkor elfogadjuk.
+#
+
+if [ "$XORRISO_RC" -ne 0 ]; then
 
     echo
-    echo "HIBA: Az ISO boot informacioja nem olvashato."
-    exit 1
+    echo "FIGYELEM:"
+    echo "xorriso exit code: $XORRISO_RC"
+    echo
+    echo "Viszont:"
+    echo " - output ISO letezik"
+    echo " - SquashFS letezik"
+    echo " - filesystem.size letezik"
+    echo " - El Torito rendben"
+    echo " - EFI rendben"
 
 fi
 
-echo
-echo "Boot report sikeresen kiolvasva."
-
-#
-# Ellenorizzuk, hogy van-e El Torito boot bejegyzes.
-#
-
-if ! grep -qi "El Torito" "$BOOT_REPORT"; then
-
-    echo
-    echo "HIBA: Nem talalhato El Torito boot informacio."
-    exit 1
-
-fi
-
-echo "El Torito boot informacio: OK"
-
-#
-# ISO fajlrendszer ellenorzes
-#
-
-echo
-echo "Casper fajlok ellenorzese..."
-
-xorriso \
-    -indev "$OUTPUT_ISO" \
-    -find /casper -type f -exec lsdl
-
-#
-# Ellenorizzuk, hogy az uj SquashFS benne van-e.
-#
-
-set +e
-
-xorriso \
-    -indev "$OUTPUT_ISO" \
-    -find "$SQUASH_ISO_PATH" \
-    -type f \
-    -exec lsdl \
-    > "$WORKDIR/squash-check.txt" 2>&1
-
-SQUASH_CHECK_EXIT=$?
-
-set -e
-
-if [ "$SQUASH_CHECK_EXIT" -ne 0 ]; then
-
-    echo
-    echo "HIBA: A LollyOS SquashFS nem talalhato az ISO-ban."
-    cat "$WORKDIR/squash-check.txt"
-    exit 1
-
-fi
-
-cat "$WORKDIR/squash-check.txt"
-
-echo
-echo "LollyOS SquashFS: OK"
-
-#
+# ============================================================
 # 9. SHA256
-#
+# ============================================================
 
-echo
-echo "[9/9] SHA256 keszitese..."
+log "9/9" "SHA256 keszitese..."
 
-sha256sum "$OUTPUT_ISO" > "$OUTPUT_ISO.sha256"
+sha256sum "$OUTPUT_ISO" \
+    > "$OUTPUT_ISO.sha256"
 
-if [ ! -s "$OUTPUT_ISO.sha256" ]; then
-    echo "HIBA: SHA256 generalasa sikertelen."
-    exit 1
-fi
+[ -s "$OUTPUT_ISO.sha256" ] || \
+    die "SHA256 nem keszult el."
 
 echo
 echo "========================================"
 echo " LOLLYOS BUILD KESZ"
 echo "========================================"
-echo
 
+echo
 echo "ISO:"
 ls -lh "$OUTPUT_ISO"
 
@@ -441,17 +401,11 @@ echo "SHA256:"
 cat "$OUTPUT_ISO.sha256"
 
 echo
-echo "Boot ellenorzes: OK"
-echo "SquashFS ellenorzes: OK"
-
-if [ "$XORRISO_EXIT" -eq 0 ]; then
-    echo "xorriso: OK"
-else
-    echo "xorriso figyelmeztetessel fejezodott be: $XORRISO_EXIT"
-fi
+echo "ELLENORZESEK:"
+echo " [OK] SquashFS"
+echo " [OK] filesystem.size"
+echo " [OK] El Torito"
+echo " [OK] EFI"
 
 echo
-echo "Kimenet:"
-echo "$OUTPUT_ISO"
-echo
-echo "LollyOS ${VERSION} build befejezve."
+echo "LollyOS ${VERSION} build sikeresen befejezve."
