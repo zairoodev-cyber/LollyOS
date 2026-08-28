@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#090713"/>
+      <stop offset="0.45" stop-color="#1b0a31"/>
+      <stop offset="1" stop-color="#05050a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="46%" r="48%">
+      <stop offset="0" stop-color="#cf4dff" stop-opacity="0.55"/>
+      <stop offset="0.35" stop-color="#7a1fc9" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="35"/></filter>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <ellipse cx="960" cy="500" rx="700" ry="420" fill="url(#glow)" filter="url(#blur)"/>
+  <circle cx="960" cy="425" r="175" fill="#7f25c7" opacity="0.28"/>
+  <circle cx="960" cy="425" r="145" fill="#d04bff" opacity="0.12"/>
+  <path d="M0 805 C260 710 390 760 600 690 C820 615 1040 740 1260 650 C1480 565 1630 650 1920 540 L1920 1080 L0 1080 Z" fill="#0b0717"/>
+  <path d="M0 875 C320 790 480 855 720 785 C980 705 1220 835 1480 750 C1650 695 1790 715 1920 675 L1920 1080 L0 1080 Z" fill="#120921"/>
+  <text x="960" y="480" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="138" font-weight="700" fill="#ffffff" letter-spacing="-6">Lolly<tspan fill="#db4aff">OS</tspan></text>
+  <text x="960" y="552" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="28" fill="#d7b4ef" letter-spacing="4">SWEET. FAST. YOURS.</text>
+</svg>

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=LollyOS Desktop
+Comment=Apply the LollyOS desktop experience
+Exec=/usr/local/bin/lolly-desktop-apply
+OnlyShowIn=XFCE;
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

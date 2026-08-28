@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=LollyOS Beállítások
+Comment=Rendszerbeállítások
+Exec=xfce4-settings-manager
+Icon=preferences-system
+Terminal=false
+Categories=Settings;X-XFCE-SettingsDialog;

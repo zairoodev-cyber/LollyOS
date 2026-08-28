@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+WALLPAPER="/usr/share/backgrounds/lollyos/lollyos-wallpaper.svg"
+
+# Give XFCE a moment to bring xfconfd up in a fresh live session.
+for _ in $(seq 1 20); do
+  if xfconf-query -c xsettings -p /Net/ThemeName >/dev/null 2>&1; then
+    break
+  fi
+  sleep 0.5
+done
+
+# LollyOS GTK theme.
+xfconf-query -c xsettings -p /Net/ThemeName -s LollyOS >/dev/null 2>&1 || true
+xfconf-query -c xsettings -p /Net/IconThemeName -s elementary-xfce-dark >/dev/null 2>&1 || true
+
+# Apply the wallpaper to every currently exposed XFCE workspace/monitor property.
+if [ -f "$WALLPAPER" ]; then
+  while IFS= read -r prop; do
+    [ -n "$prop" ] || continue
+    xfconf-query -c xfce4-desktop -p "$prop" -s "$WALLPAPER" >/dev/null 2>&1 || true
+  done < <(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep '/last-image$' || true)
+fi
+
+# Keep the dock-like panel at the bottom and refresh it after defaults are loaded.
+xfconf-query -c xfce4-panel -p /panels/panel-1/position -s 'p=8;x=960;y=1048' >/dev/null 2>&1 || true
+xfconf-query -c xfce4-panel -p /panels/panel-1/size -s 48 >/dev/null 2>&1 || true
+xfconf-query -c xfce4-panel -p /panels/panel-1/length -s 92 >/dev/null 2>&1 || true
+xfconf-query -c xfce4-panel -p /panels/panel-1/length-adjust -s false >/dev/null 2>&1 || true
+xfconf-query -c xfce4-panel -p /panels/panel-1/background-style -s 0 >/dev/null 2>&1 || true
+
+xfce4-panel -r >/dev/null 2>&1 || true
